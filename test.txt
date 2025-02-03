@@ -1,0 +1,80 @@
+#!/bin/bash
+
+
+IP1="10.10.10.2"
+IP2=" 100.100.101.2"
+IFACE=" 100.100.100.1"
+VRF="vrf100"
+
+ping_check() {
+  local ip=$1
+  if ping -c 1 -W 1 "$ip" > /dev/null 2>&1; then
+    return 0 
+  else
+    return 1 
+  fi
+}
+
+
+
+ping_vrf_check() {
+    local ip=$1
+    local iface=$2
+    local vrf=$3
+
+    if ip vrf exec "$vrf" ping -c 1 -W 1 -I "$iface" "$ip" > /dev/null 2>&1; then
+        return 0 
+    else
+        return 1
+    fi
+}
+
+
+
+
+if ! ping_check "$IP1"; then
+  echo "link to $IP1 down. END."
+  exit 1  
+fi
+
+echo "LINK TO $IP1 OK"
+
+
+if ping_vrf_check "$IP2" "$IFACE" "$VRF"; then
+  echo "link to $IP2 in VRF $VRF OK. END."
+  exit 0 
+fi
+
+echo "link to $IP2 in VRF $VRF down. NEED RESET BGP VRF"
+
+
+vtysh -c "conf t" -c "no bgp router 48343 vrf "$VRF" "
+if [ $? -eq 0 ]; then
+  echo "command 'no bgp router 48343 vrf "$VRF" ' WELL DONE"
+  vtysh -c "copy /home/root/test.conf running-config"
+  if [ $? -eq 0 ]; then
+    echo "command 'copy /home/root/test.conf running-config' WELL DONE"
+  else
+    echo "ERORR 'copy /home/root/test.conf running-config'."
+    exit 1
+  fi
+else
+  echo "ERROR 'no router 48343 vrf "$VRF" '."
+  exit 1 
+fi
+
+exit 0
+
+
+#router bgp 48343 vrf vrf20
+ #!
+ #address-family ipv4 unicast
+ # redistribute connected
+ # label vpn export auto
+ # rd vpn export 48343:20
+ # rt vpn both 48343:20
+ # export vpn
+ # import vpn
+ #exit-address-family
+#exit
+#!
